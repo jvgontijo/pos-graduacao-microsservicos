@@ -1,0 +1,138 @@
+version: '3.8'
+
+services:
+  postgres-user-db:
+    image: postgres:14
+    container_name: postgres-user-db
+    environment:
+      POSTGRES_DB: user_db
+      POSTGRES_USER: user_service
+      POSTGRES_PASSWORD: user_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - user_db_data:/var/lib/postgresql/data
+    networks:
+      - spring-boot-network
+
+  postgres-product-db:
+    image: postgres:14
+    container_name: postgres-product-db
+    environment:
+      POSTGRES_DB: product_db
+      POSTGRES_USER: product_service
+      POSTGRES_PASSWORD: product_password
+    ports:
+      - "5433:5432"
+    volumes:
+      - product_db_data:/var/lib/postgresql/data
+    networks:
+      - spring-boot-network
+
+  gateway-service:
+    image: gateway
+    container_name: gateway
+    environment:
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://discovery-service:8761/eureka
+    ports:
+      - "9999:9999"
+    depends_on:
+      - discovery-service
+    networks:
+      - spring-boot-network
+
+  discovery-service:
+    image: discovery-service
+    container_name: discovery-service
+    ports:
+      - "8761:8761"
+    networks:
+      - spring-boot-network
+
+  user-service:
+    image: user-service
+    container_name: user-service
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-user-db:5432/user_db
+      SPRING_DATASOURCE_USERNAME: user_service
+      SPRING_DATASOURCE_PASSWORD: user_password
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://discovery-service:8761/eureka
+    depends_on:
+      - postgres-user-db
+      - discovery-service
+    networks:
+      - spring-boot-network
+
+  product-service:
+    image: product-service
+    container_name: product-service
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-product-db:5432/product_db
+      SPRING_DATASOURCE_USERNAME: product_service
+      SPRING_DATASOURCE_PASSWORD: product_password
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://discovery-service:8761/eureka
+    depends_on:
+      - postgres-product-db
+      - discovery-service
+    networks:
+      - spring-boot-network
+
+  adminer:
+    image: adminer
+    container_name: adminer
+    ports:
+      - 8080:8080
+    networks:
+      - spring-boot-network
+      
+  elasticsearch:
+    image: elasticsearch:8.7.1
+    container_name: elasticsearch
+    environment:
+      - discovery.type=single-node
+      - ES_JAVA_OPTS=-Xms512m -Xmx512m
+    ports:
+      - "9200:9200"
+    volumes:
+      - esdata:/usr/share/elasticsearch/data
+
+  logstash:
+    image: logstash:8.7.1
+    container_name: logstash
+    ports:
+      - "5044:5044"
+    volumes:
+      - ./logstash/pipeline:/usr/share/logstash/pipeline
+    depends_on:
+      - elasticsearch
+
+  kibana:
+    image: kibana:8.7.1
+    container_name: kibana
+    ports:
+      - "5601:5601"
+    depends_on:
+      - elasticsearch
+      
+  rabbitmq:
+    image: rabbitmq:management
+    container_name: rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    networks:
+      - spring-boot-network
+
+
+networks:
+  spring-boot-network:
+    driver: bridge
+
+volumes:
+  user_db_data:
+  product_db_data:
+  esdata:
+
